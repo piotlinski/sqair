@@ -12,16 +12,16 @@ cfg = AttrDict({
     # 'device': 'cpu',
     'dataset': {
         'seq_mnist': 'dataset/',
-        'seq_len': 15
+        'seq_len': 10
     },
 
     'train': {
-        'batch_size': 32,
+        'batch_size': 128,
         'model_lr': 1e-4,
         'max_epochs': 1000
     },
     'valid': {
-        'batch_size': 32
+        'batch_size': 128
     },
     'anneal': {
         'initial': 0.70,
