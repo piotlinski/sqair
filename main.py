@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from lib.vimco import SQAIRVIMCO
 from lib.config import cfg
 from torch.optim import Adam
+from tqdm import trange
 from tensorboardX import SummaryWriter
 from lib.utils import vis_logger, metric_logger, WeightScheduler, Checkpointer
 
@@ -36,7 +37,7 @@ if __name__ == '__main__':
     #     cfg.load_cfg(f)
     # cfg.merge_from_file(args.config)
     # cfg.merge_from_list(args.opts)
-    
+
     trainset = SequentialMNIST(root=cfg.dataset.seq_mnist, mode='train', seq_len=cfg.dataset.seq_len)
     trainloader = DataLoader(trainset, batch_size=cfg.train.batch_size, shuffle=True, num_workers=4,
                              collate_fn=collate_fn)
@@ -44,22 +45,22 @@ if __name__ == '__main__':
 
     model = SQAIRVIMCO().to(cfg.device)
     model.train()
-    
+
     optimizer = Adam(model.parameters(), lr=cfg.train.model_lr)
-    
-    
+
+
     weight_scheduler = WeightScheduler(0.0, 1.0, 10000, 20000, 500, model, cfg.device)
-    
+
     checkpointer = Checkpointer(os.path.join(cfg.checkpointdir, cfg.exp_name))
 
     start_epoch = 0
     if cfg.resume:
         start_epoch = checkpointer.load(model, optimizer)
-        
+
     writer = SummaryWriter(logdir=os.path.join(cfg.logdir, cfg.exp_name), flush_secs=30)
-    
+
     print('Start training')
-    for epoch in range(start_epoch, cfg.train.max_epochs):
+    for epoch in trange(start_epoch, cfg.train.max_epochs):
         for i, data in enumerate(trainloader):
             global_step = epoch * len(trainloader) + i + 1
             imgs, nums = data
@@ -70,7 +71,7 @@ if __name__ == '__main__':
             loss.backward()
             optimizer.step()
             weight_scheduler.step(global_step)
-            
+
             metric_logger.update(loss=loss.item())
 
             if (i + 1) % 50 == 0:
@@ -85,10 +86,10 @@ if __name__ == '__main__':
                 # writer.add_scalar('accuracy/train_two', acc_two, global_step)
                 # writer.add_scalar('other/pres_prior_prob', prior_scheduler.current, global_step)
                 # writer.add_scalar('other/reinforce_weight', weight_scheduler.current, global_step)
-                
+
 
         checkpointer.save(model, optimizer, epoch+1)
 
 
-            
+
 

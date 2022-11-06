@@ -1,0 +1,8 @@
+attrdict
+matplotlib
+numpy
+Pillow
+tensorboardX
+torch
+yacs
+tqdm
