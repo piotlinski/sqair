@@ -1,7 +1,9 @@
 import os
+import json
 import numpy as np
 import torch
-import pickle
+from PIL import Image
+from pathlib import Path
 from torch.utils.data import Dataset
 
 
@@ -17,77 +19,66 @@ class SequentialMNIST(Dataset):
             len: sequence length
         """
         assert mode in ['train', 'valid'], 'Invalid dataset mode'
-        Dataset.__init__(self)
-        path = {
-            'train': 'seq_mnist_train.pickle',
-            'valid': 'seq_mnist_validation.pickle'
-        }[mode]
+        path = {"train": "train", "valid": "test"}[mode]
+        super().__init__()
         # Path to the pickle file
         path = os.path.join(root, path)
-        # Load dataset
-        with open(path, 'rb') as f:
-            dataset = pickle.load(f, encoding='latin1')
-            
+
+        self.sequences = list(sorted(Path(path).glob("*")))
+        self.anns = [json.load(p.joinpath("annotations.json").open()) for p in self.sequences]
+
         # (T, N, H, W)
-        self.imgs = dataset['imgs'][:seq_len]
-        # (N, 2), numbers in the digits
-        self.labels = dataset['labels']
-        # (T, N, 2, 4), the last dimension being [x, y, w, h]
-        self.coords = dataset['coords']
-        # (1, N, 3), bool
-        self.nums = dataset['nums']
-        # (1, N, 3) -> (1, N)
-        self.nums = np.sum(self.nums, axis=-1)
-        
+
+    @staticmethod
+    def load_image(path):
+        return np.array(Image.open(path))[:, :, [0]]
+
+
     def __getitem__(self, index):
         """
         Args:
             index: integer
         Returns:
             A tuple (imgs, nums).
-            
+
             imgs: (T, 1, C, H, W), FloatTensor in range (0, 1)
             nums: (T, 1), int, number of digits for each time step
         """
-        
-        # (T, H, W)
-        imgs = self.imgs[:, index]
-        # (1,)
-        nums = self.nums[:, index].astype(np.float)
-        
+        sequence = self.sequences[index]
+        ann = self.anns[index]
+
+        images_files = list(sorted(sequence.glob("*.jpg")))
+        imgs = np.stack(self.load_image(p) for p in images_files).transpose(0, 3, 1, 2)
+        nums = [len(a["bboxes"]) for a in ann]
+
         imgs = imgs.astype(np.float) / 255.0
         imgs = torch.from_numpy(imgs).float()
-        nums = torch.from_numpy(nums).float()
-        
-        T = imgs.size(0)
-        # (T, 1, C, H, W)
-        imgs = imgs[:, None, None]
-        # (1, 1)
-        # (1, 1) -> (T, 1)
-        nums = nums.expand(T, 1)
-        
-        
+        nums = torch.Tensor(nums).float()
+
+        imgs = imgs.unsqueeze(1)
+        nums = nums.unsqueeze(-1)
+
         return imgs, nums
-    
+
     def __len__(self):
-        return self.imgs.shape[1]
-    
-    
+        return len(self.sequences)
+
+
 def collate_fn(samples):
     """
     collate_fn for SequentialMNIST.
-    
+
     Args:
         samples: a list of samples. Each item is a (imgs, nums) pair. Where
-        
+
             - imgs: shape (T, 1, C, H, W)
             - nums: shape (T, 1)
-            
+
             And len(samples) is the batch size.
 
     Returns:
         A tuple (imgs, nums). Where
-        
+
         - imgs: shape (T, B, C, H, W)
         - nums: shape (T, B)
     """
@@ -96,8 +87,8 @@ def collate_fn(samples):
     imgs = torch.cat(imgs, dim=1)
     # (T, B)
     nums = torch.cat(nums, dim=1)
-    
+
     return imgs, nums
-    
-        
-        
+
+
+
