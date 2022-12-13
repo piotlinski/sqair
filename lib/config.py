@@ -8,8 +8,8 @@ cfg = AttrDict({
     # 'exp_name': 'test-mask',
     'exp_name': 'multiscalemnist',
     'resume': False,
-    'device': 'cuda:0',
-    # 'device': 'cpu',
+    # 'device': 'cuda:0',
+    'device': 'cpu',
     'dataset': {
         'seq_mnist': 'dataset/',
         'seq_len': 10

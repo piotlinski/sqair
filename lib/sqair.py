@@ -1,4 +1,10 @@
 import torch
+
+import collections
+import collections.abc
+for type_name in collections.abc.__all__:
+    setattr(collections, type_name, getattr(collections.abc, type_name))
+
 from attrdict import AttrDict
 from torch import nn
 from copy import deepcopy
@@ -20,11 +26,11 @@ arch = AttrDict({
     'K': 3,
 
     # network related
-    'input_shape': (128, 128),
+    'input_shape': (64, 64),
     'glimpse_shape': (32, 32),
-    'input_size': 128 * 128,
+    'input_size': 64 * 64,
     'glimpse_size': 32 * 32,
-    'z_what_size': 50,
+    'z_what_size': 32,
     'z_where_size': 4,
     'z_pres_size': 1,
 
@@ -678,6 +684,8 @@ class SQAIR(nn.Module):
         vis_logger['mask'] = []
         vis_logger['proposal'] = []
         vis_logger['imgs'] = []
+        vis_logger['z_what'] = []
+        vis_logger["y"] = []
 
         # Append T*K items
         vis_logger['kl_pres_list'] = []
@@ -688,8 +696,9 @@ class SQAIR(nn.Module):
             # Enter time step t
             # (B, 1, H, W)
             image = x[t]
-            vis_logger['imgs'].append(image[0][0])
+            vis_logger['imgs'].append(image)
             # Compute embedding for this image (B, N)
+
             image_embed = self.embedding(image)
 
 
@@ -735,6 +744,7 @@ class SQAIR(nn.Module):
             # Reconstruct and compute likelihood
             recons, ll = self.reconstruct(object_list, image)
             likelihood_total += ll
+            vis_logger['y'].append(recons)
 
 
         elbo = likelihood_total - kl_total
@@ -1085,8 +1095,10 @@ class SQAIR(nn.Module):
         vis_logger['id_cur'] = []
         vis_logger['mask_cur'] = []
         vis_logger['proposal_cur'] = []
+        vis_logger['z_what_cur'] = []
 
         for obj in object_list:
+            vis_logger['z_what_cur'].append(obj.z_what)
             # Decode to (B, 1, H, W)
             glimpse = self.decoder(obj.z_what)
             # Transform to image size
@@ -1100,18 +1112,18 @@ class SQAIR(nn.Module):
             # (H, W)
             vis_logger['canvas_cur'].append(canvas[0][0])
             # Scalar
-            vis_logger['z_pres_cur'].append(obj.z_pres[0][0])
+            vis_logger['z_pres_cur'].append(obj.z_pres)
             # Scalar
-            vis_logger['z_pres_prob_cur'].append(obj.z_pres_prob[0][0])
+            vis_logger['z_pres_prob_cur'].append(obj.z_pres_prob)
             # (4,)
-            vis_logger['z_where_cur'].append(obj.z_where[0])
+            vis_logger['z_where_cur'].append(obj.z_where)
             # Scalar
             vis_logger['id_cur'].append(obj.id[0][0])
             # (H, W)
-            vis_logger['object_enc_cur'].append(obj.object_enc[0].view(*arch.glimpse_shape))
+            vis_logger['object_enc_cur'].append(obj.object_enc.view(-1, *arch.glimpse_shape))
             # (H, W)
-            vis_logger['object_dec_cur'].append(glimpse[0][0])
-            vis_logger['mask_cur'].append(obj.mask[0].view(*arch.glimpse_shape))
+            vis_logger['object_dec_cur'].append(glimpse)
+            vis_logger['mask_cur'].append(obj.mask.view(-1, *arch.glimpse_shape))
             vis_logger['proposal_cur'].append(obj.proposal[0])
 
         vis_logger['canvas'].append(vis_logger['canvas_cur'])
@@ -1123,6 +1135,7 @@ class SQAIR(nn.Module):
         vis_logger['object_dec'].append(vis_logger['object_dec_cur'])
         vis_logger['mask'].append(vis_logger['mask_cur'])
         vis_logger['proposal'].append(vis_logger['proposal_cur'])
+        vis_logger['z_what'].append(vis_logger['z_what_cur'])
 
         # Construct output distribution
         output_dist = Normal(canvas, arch.x_scale.expand(canvas.size()))
